@@ -1,13 +1,18 @@
 #include <OneWire.h>
 #include "pitches.h"
 #include <EEPROM.h>
-#include <OLED_I2C.h> //импорт библиотеки
+#include <OLED_I2C.h> 
 OLED myOLED(SDA, SCL); //создаем экземпляр класса OLED с именем myOLED
 extern uint8_t SmallFont[];
-extern uint8_t RusFont[];
 extern uint8_t BigNumbers[];
+#include "GyverEncoder.h"
 
+//settings
+#define rfidUsePWD 0        // ключ использует пароль для изменения
+#define rfidPWD 123456      // пароль для ключа
+#define rfidBitRate 2       // Скорость обмена с rfid в kbps
 
+//pins
 #define iButtonPin A3      // Линия data ibutton
 #define R_Led 2            // RGB Led
 #define G_Led 3
@@ -20,13 +25,16 @@ extern uint8_t BigNumbers[];
 #define FreqGen 11         // генератор 125 кГц
 #define speakerPinGnd 12   // земля Спикера
 #define blueModePin A2      // Эмулятор ключа rfid
-#define rfidBitRate 2       // Скорость обмена с rfid в kbps
-#define rfidUsePWD 0        // ключ использует пароль для изменения
-#define rfidPWD 123456      // пароль для ключа
+
+#define CLK A1//6
+#define DT A0 //5
+#define SW 8              // Кнопка переключения режима чтение/запись
+Encoder enc1(CLK, DT, SW);
+
 
 OneWire ibutton (iButtonPin);
-byte EEPROM_key_count;                    // количество ключей, хранящихся в EEPROM
-byte EEPROM_key_index = 0;                    // номер последнего записанного в EEPROM ключа  
+byte EEPROM_key_count;                    // количество ключей 0..8, хранящихся в EEPROM
+byte EEPROM_key_index = 0;                    // 1..8 номер последнего записанного в EEPROM ключа  
 byte addr[8];                             // временный буфер
 byte keyID[8];                            // ID ключа для записи
 byte rfidData[5];                         // значащие данные frid em-marine
@@ -53,33 +61,24 @@ void setup() {
   Serial.begin(115200);
   myOLED.clrScr();          //Очищаем буфер дисплея.
   myOLED.setFont(SmallFont);  //Перед выводом текста необходимо выбрать шрифт
-  myOLED.print("Hello, ", LEFT, 1);
-  //myOLED.setFont(RusFont);  //Перед выводом текста необходимо выбрать шрифт
-  //myOLED.print("Ghbdtn!", 40, 20); // Привет!
+  myOLED.print("Hello, read a key...", LEFT, 0);
   myOLED.update();
+  Sd_StartOK();
   EEPROM_key_count = EEPROM[0];
-  if (EEPROM_key_count > 7) EEPROM_key_count = 0;
+  if (EEPROM_key_count > 8) EEPROM_key_count = 0;
   if (EEPROM_key_count != 0 ) {
     EEPROM_key_index = EEPROM[1];
     Serial.print("Read key code from EEPROM: ");
     EEPROM_get_key(EEPROM_key_index, addr);
-    for (byte i = 0; i < 8; i++) keyID[i] = addr[i];
     for (byte i = 0; i < 8; i++) {
-    Serial.print(addr[i], HEX); Serial.print(":");  
-  }
+      keyID[i] = addr[i];
+      Serial.print(addr[i], HEX); Serial.print(":");  
+    }
     readflag = true;
     clearLed(); digitalWrite(G_Led, HIGH);
-    myOLED.clrScr();
-    myOLED.print("ROM has", 0, 0);
-    myOLED.printNumI(EEPROM_key_count, 45, 0);
-    myOLED.print("keys. Last:", 55, 0);
-    OLED_printKey(addr);
-    myOLED.update();
   }
-  Sd_StartOK();
-  //myOLED.clrScr();
-  //
-  //
+  OLED_printKey(addr);
+  enc1.setTickMode(AUTO);
 }
 
 void clearLed(){
@@ -88,8 +87,20 @@ void clearLed(){
   digitalWrite(B_Led, LOW);  
 }
 
-void OLED_printKey(byte* buf){
+void OLED_printKey(byte buf[8]){
   String st;
+  if(EEPROM_key_count > 0) st = "The key " + String(EEPROM_key_index) + " of " + String(EEPROM_key_count) + " in ROM";
+    else st = "ROM has no keys yet.";
+  if (EEPROM_key_count > 0) {
+    myOLED.clrScr();
+    myOLED.print(st, 0, 0);
+  }
+    else {
+      myOLED.print(st, 0, 12);
+      myOLED.update();
+      return;
+    }  
+  st = "";
   for (byte i = 0; i < 8; i++) st = st + String(buf[i], HEX) +":";
   myOLED.print(st, 0, 12);
   st = "Type ";
@@ -101,37 +112,46 @@ void OLED_printKey(byte* buf){
     case keyUnknown: st += "Unknown"; break;
   }
   myOLED.print(st, 0, 24);
+  myOLED.update();
 }
 
-void EPPROM_AddKey(byte* buf){
-  byte buf1[8]; bool eq = true;
-  EEPROM.get(2+EEPROM_key_index*sizeof(buf1), buf1);
-  for (byte i = 0; i < 8; i++) 
-    if (buf1[i] != buf[i]) {
-      eq = false;
-      break;
+void EPPROM_AddKey(byte buf[8]){
+  byte buf1[8]; bool eq = true; 
+  //EEPROM.update(0, 0);
+  //EEPROM.update(1, 0);
+  for (byte j = 1; j<=EEPROM_key_count; j++){  // ищем ключ в eeprom. Если находим, то не делаем запись, а индекс переводим в него
+    EEPROM.get(j*sizeof(buf1), buf1);
+    for (byte i = 0; i < 8; i++) 
+      if (buf1[i] != buf[i]) { eq = false; break;}
+    if (eq) {
+      EEPROM_key_index = j;
+      EEPROM.update(1, EEPROM_key_index);
+      return;  
     }
-  if (eq) return;
+    eq = true;
+  }
   EEPROM_key_count++;
   if (EEPROM_key_count > 8) EEPROM_key_count = 8;
   EEPROM_key_index++;
-  if (EEPROM_key_index > 8) EEPROM_key_index = 0;
+  if (EEPROM_key_index > EEPROM_key_count) EEPROM_key_index = 1;
   Serial.println("Adding to EEPROM");
   for (byte i = 0; i < 8; i++) {
-    Serial.print(addr[i], HEX); Serial.print(":");  
+    buf1[i] = buf[i];
+    Serial.print(buf[i], HEX); Serial.print(":");  
   }
-  EEPROM.put(2+EEPROM_key_index*sizeof(addr), addr);
-  Serial.println(); Serial.println(sizeof(addr));
+  EEPROM.put(EEPROM_key_index*sizeof(buf1), buf1);
+  //Serial.println(); Serial.println(sizeof(buf1));
   EEPROM.update(0, EEPROM_key_count);
-  //EEPROM.update(0, 0);
   EEPROM.update(1, EEPROM_key_index);
-  //EEPROM.update(1, 0);
 }
 
-void EEPROM_get_key(byte EEPROM_key_index1, byte* buf){
-  int address = 2+EEPROM_key_index1*sizeof(addr);
+void EEPROM_get_key(byte EEPROM_key_index1, byte buf[8]){
+  byte buf1[8];
+  int address = EEPROM_key_index1*sizeof(addr);
   if (address > EEPROM.length()) return;
-  EEPROM.get(2+EEPROM_key_index1*sizeof(addr), addr);
+  for (byte i = 0; i < 8; i++) buf1[i] = buf[i];
+  EEPROM.get(address, buf1);
+  for (byte i = 0; i < 8; i++) buf[i] = buf1[i];
   keyType = getKeyType(buf);
 }
 
@@ -673,13 +693,16 @@ bool write2rfid(){
   return false;
 }
 
+unsigned long stTimer = millis();
 void loop() {
+  /*
   bool BtnPinSt  = digitalRead(BtnPin);
-  bool BtnClick;
+  bool BtnClick;  
   if ((BtnPinSt == LOW) &&(preBtnPinSt!= LOW)) BtnClick = true;
     else BtnClick = false;
   preBtnPinSt = BtnPinSt;
-  if ((Serial.read() == 't') || BtnClick) {  // переключаель режима чтение/запись
+  */
+  if ((Serial.read() == 't') || enc1.isRelease()) {  // переключаель режима чтение/запись
     if (readflag == true) {
       writeflag = !writeflag;
       clearLed(); 
@@ -692,26 +715,39 @@ void loop() {
       digitalWrite(B_Led, HIGH);
     }
   }
+  if (millis() - stTimer < 100) return; //задержка в 100 мс
+  stTimer = millis();
   if (!writeflag){
     if (searchCyfral() || searchMetacom() || searchEM_Marine() || searchIbutton()){            // запускаем поиск cyfral, затем поиск EM_Marine, затем поиск dallas
       digitalWrite(G_Led, LOW);
       Sd_ReadOK();
       readflag = true;
       clearLed(); digitalWrite(G_Led, HIGH);
-      myOLED.clrScr();
-      OLED_printKey(addr);  
-      myOLED.update();
-      EPPROM_AddKey(addr);
-    } else {
-      delay(100);   //ничего не нашлось - начинаем сначала
-      return;
-    } 
+      OLED_printKey(addr);
+    }
+    if (readflag){
+      if (enc1.isHolded()){
+        EPPROM_AddKey(addr);
+        OLED_printKey(addr);  
+      }
+      if (enc1.isLeft() && (EEPROM_key_count > 0)){
+        EEPROM_key_index--;
+        if (EEPROM_key_index < 1) EEPROM_key_index = EEPROM_key_count;
+        EEPROM_get_key(EEPROM_key_index, addr);
+        OLED_printKey(addr);            
+      }
+      if (enc1.isRight() && (EEPROM_key_count > 0)){
+        EEPROM_key_index++;
+        if (EEPROM_key_index > EEPROM_key_count) EEPROM_key_index = 1;
+        EEPROM_get_key(EEPROM_key_index, addr);
+        OLED_printKey(addr);            
+      }
+    }
   }
   if (writeflag && readflag){
     if (keyType == keyEM_Marine) write2rfid();
       else write2iBtn();
   }
-  delay(200);
 }
 
 //***************** звуки****************
