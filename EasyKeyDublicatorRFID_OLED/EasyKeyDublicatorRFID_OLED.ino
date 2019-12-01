@@ -6,6 +6,7 @@ OLED myOLED(SDA, SCL); //создаем экземпляр класса OLED с 
 extern uint8_t SmallFont[];
 extern uint8_t BigNumbers[];
 #include "GyverEncoder.h"
+#include "TimerOne.h"
 
 //settings
 #define rfidUsePWD 0        // ключ использует пароль для изменения
@@ -17,18 +18,15 @@ extern uint8_t BigNumbers[];
 #define R_Led 2            // RGB Led
 #define G_Led 3
 #define B_Led 4
-#define ACpinGnd 5         // Земля аналогового компаратора
 #define ACpin 6            // Вход Ain0 аналогового компаратора 0.1В для EM-Marie 
-#define BtnPin 8           // Кнопка переключения режима чтение/запись
-#define BtnPinGnd 9        // Земля кнопки переключения режима 
-#define speakerPin 10       // Спикер, он же buzzer, он же beeper
+#define BtnPin 10           // Кнопка переключения режима чтение/запись
+#define speakerPin 12       // Спикер, он же buzzer, он же beeper
 #define FreqGen 11         // генератор 125 кГц
-#define speakerPinGnd 12   // земля Спикера
 #define blueModePin A2      // Эмулятор ключа rfid
 
-#define CLK A1//6
-#define DT A0 //5
-#define SW 8              // Кнопка переключения режима чтение/запись
+#define CLK 8
+#define DT 9
+#define SW 10              // Кнопка переключения режима чтение/запись
 Encoder enc1(CLK, DT, SW);
 
 
@@ -48,11 +46,8 @@ emkeyType keyType;
 void setup() {
   myOLED.begin(SSD1306_128X32); //инициализируем дисплей
   pinMode(BtnPin, INPUT_PULLUP);                            // включаем чтение и подягиваем пин кнопки режима к +5В
-  pinMode(BtnPinGnd, OUTPUT); digitalWrite(BtnPinGnd, LOW); // подключаем второй пин кнопки к земле
   pinMode(speakerPin, OUTPUT);
-  pinMode(speakerPinGnd, OUTPUT); digitalWrite(speakerPinGnd, LOW); // подключаем второй пин спикера к земле
-  pinMode(ACpin, INPUT);                                            // Вход аналогового компаратора 3В для Cyfral
-  pinMode(ACpinGnd, OUTPUT); digitalWrite(ACpinGnd, LOW);           // подключаем второй пин аналогового компаратора Cyfral к земле 
+  pinMode(ACpin, INPUT);                                            // Вход аналогового компаратора 3В для Cyfral 
   pinMode(R_Led, OUTPUT); pinMode(G_Led, OUTPUT); pinMode(B_Led, OUTPUT);  //RGB-led
   digitalWrite(blueModePin, LOW); pinMode(blueModePin, OUTPUT);
   clearLed();
@@ -74,11 +69,22 @@ void setup() {
       keyID[i] = addr[i];
       Serial.print(addr[i], HEX); Serial.print(":");  
     }
+    OLED_printKey(addr);
     readflag = true;
     clearLed(); digitalWrite(G_Led, HIGH);
+  } else {
+    myOLED.print("ROM has no keys yet.", 0, 12);
+    myOLED.update();  
   }
-  OLED_printKey(addr);
   enc1.setTickMode(AUTO);
+  enc1.setType(TYPE2);
+  enc1.setDirection(REVERSE); // NORM / REVERSE
+  Timer1.initialize(1000);            // установка таймера на каждые 1000 микросекунд (= 1 мс)
+  Timer1.attachInterrupt(timerIsr);   // запуск таймера
+}
+
+void timerIsr() {   // прерывание таймера для энкодера
+  enc1.tick();     // отработка теперь находится здесь
 }
 
 void clearLed(){
@@ -86,20 +92,18 @@ void clearLed(){
   digitalWrite(G_Led, LOW);
   digitalWrite(B_Led, LOW);  
 }
+void MyDelay(unsigned long tm){
+  unsigned long stTr = millis();
+  do {
+    enc1.tick();    
+  } while (millis() < (stTr + tm)); 
+}
 
 void OLED_printKey(byte buf[8]){
   String st;
-  if(EEPROM_key_count > 0) st = "The key " + String(EEPROM_key_index) + " of " + String(EEPROM_key_count) + " in ROM";
-    else st = "ROM has no keys yet.";
-  if (EEPROM_key_count > 0) {
-    myOLED.clrScr();
-    myOLED.print(st, 0, 0);
-  }
-    else {
-      myOLED.print(st, 0, 12);
-      myOLED.update();
-      return;
-    }  
+  st = "The key " + String(EEPROM_key_index) + " of " + String(EEPROM_key_count) + " in ROM";
+  myOLED.clrScr();
+  myOLED.print(st, 0, 0);  
   st = "";
   for (byte i = 0; i < 8; i++) st = st + String(buf[i], HEX) +":";
   myOLED.print(st, 0, 12);
@@ -115,7 +119,7 @@ void OLED_printKey(byte buf[8]){
   myOLED.update();
 }
 
-void EPPROM_AddKey(byte buf[8]){
+bool EPPROM_AddKey(byte buf[8]){
   byte buf1[8]; bool eq = true; 
   //EEPROM.update(0, 0);
   //EEPROM.update(1, 0);
@@ -126,7 +130,7 @@ void EPPROM_AddKey(byte buf[8]){
     if (eq) {
       EEPROM_key_index = j;
       EEPROM.update(1, EEPROM_key_index);
-      return;  
+      return false;  
     }
     eq = true;
   }
@@ -143,16 +147,17 @@ void EPPROM_AddKey(byte buf[8]){
   //Serial.println(); Serial.println(sizeof(buf1));
   EEPROM.update(0, EEPROM_key_count);
   EEPROM.update(1, EEPROM_key_index);
+  return true;
 }
 
 void EEPROM_get_key(byte EEPROM_key_index1, byte buf[8]){
   byte buf1[8];
-  int address = EEPROM_key_index1*sizeof(addr);
+  int address = EEPROM_key_index1*sizeof(buf1);
   if (address > EEPROM.length()) return;
-  for (byte i = 0; i < 8; i++) buf1[i] = buf[i];
+  //for (byte i = 0; i < 8; i++) buf1[i] = buf[i];
   EEPROM.get(address, buf1);
   for (byte i = 0; i < 8; i++) buf[i] = buf1[i];
-  keyType = getKeyType(buf);
+  keyType = getKeyType(buf1);
 }
 
 emkeyType getKeyType(byte* buf){
@@ -360,7 +365,7 @@ bool searchIbutton(){
 }
 
 //************ Cyfral ***********************
-unsigned long pulseAComp(bool pulse, unsigned long timeOut = 20000){  // pulse HIGH or LOW
+unsigned long pulseAComp(bool pulse, unsigned long timeOut = 600){  // pulse HIGH or LOW
   bool AcompState;
   unsigned long tStart = micros();
   do {
@@ -387,7 +392,7 @@ void ACsetOn(){
 bool read_cyfral(byte* buf, byte CyfralPin){
   unsigned long ti; byte j = 0;
   digitalWrite(CyfralPin, LOW); pinMode(CyfralPin, OUTPUT);  //отклчаем питание от ключа
-  delay(50);
+  MyDelay(50);
   pinMode(CyfralPin, INPUT);  // включаем пиание Cyfral
   ACsetOn(); 
   for (byte i = 0; i<36; i++){    // чиаем 36 bit
@@ -424,7 +429,7 @@ bool searchCyfral(){
 bool read_metacom(byte* buf, byte MetacomPin){
   unsigned long ti; byte j = 1, k = 0;
   digitalWrite(MetacomPin, LOW); pinMode(MetacomPin, OUTPUT);  //отклчаем питание от ключа
-  delay(50);
+  MyDelay(50);
   pinMode(MetacomPin, INPUT);  // включаем пиание Metacom
   ACsetOn();
   ti = pulseAComp(HIGH);
@@ -483,7 +488,7 @@ bool vertEvenCheck(byte* buf){        // проверка четности ст�
   return true;
 }
 
-byte ttAComp(unsigned long timeOut = 10000){  // pulse 0 or 1 or -1 if timeout
+byte ttAComp(unsigned long timeOut = 1000){  // pulse 0 or 1 or -1 if timeout
   byte AcompState, AcompInitState;
   unsigned long tStart = micros();
   AcompInitState = (ACSR >> ACO)&1;               // читаем флаг компаратора
@@ -542,7 +547,7 @@ bool searchEM_Marine( bool copyKey = true){
   byte gr = digitalRead(G_Led);
   bool rez = false;
   rfidACsetOn();            // включаем генератор 125кГц и компаратор
-  delay(13);                //13 мс длятся переходные прцессы детектора 
+  MyDelay(13);                //13 мс длятся переходные прцессы детектора 
   if (!readEM_Marie(addr)) goto l2;
   rez = true;
   keyType = keyEM_Marine;
@@ -646,7 +651,7 @@ bool write2rfidT5557(byte* buf){
 emRWType getRfidRWtype(){
   unsigned long data32, data33; byte buf[4] = {0, 0, 0, 0}; 
   rfidACsetOn();            // включаем генератор 125кГц и компаратор
-  delay(13);                //13 мс длятся переходные прцессы детектора
+  MyDelay(13);                //13 мс длятся переходные прцессы детектора
   rfidGap(30 * 8);          //start gap
   sendOpT5557(0b11, 0, 0, 0, 1); //переходим в режим чтения Vendor ID 
   if (!T5557_blockRead(buf)) return rwUnknown; 
@@ -695,13 +700,6 @@ bool write2rfid(){
 
 unsigned long stTimer = millis();
 void loop() {
-  /*
-  bool BtnPinSt  = digitalRead(BtnPin);
-  bool BtnClick;  
-  if ((BtnPinSt == LOW) &&(preBtnPinSt!= LOW)) BtnClick = true;
-    else BtnClick = false;
-  preBtnPinSt = BtnPinSt;
-  */
   if ((Serial.read() == 't') || enc1.isRelease()) {  // переключаель режима чтение/запись
     if (readflag == true) {
       writeflag = !writeflag;
@@ -715,33 +713,34 @@ void loop() {
       digitalWrite(B_Led, HIGH);
     }
   }
+  if (enc1.isLeft() && (EEPROM_key_count > 0)){       //при повороте энкодера листаем ключи из eeprom
+    EEPROM_key_index--;
+    if (EEPROM_key_index < 1) EEPROM_key_index = EEPROM_key_count;
+    EEPROM_get_key(EEPROM_key_index, addr);
+    OLED_printKey(addr);
+    Sd_WriteStep();
+  }
+  if (enc1.isRight() && (EEPROM_key_count > 0)){
+    EEPROM_key_index++;
+    if (EEPROM_key_index > EEPROM_key_count) EEPROM_key_index = 1;
+    EEPROM_get_key(EEPROM_key_index, addr);
+    OLED_printKey(addr);
+    Sd_WriteStep();            
+  }
+  if (!writeflag && readflag && enc1.isHolded()){     // Если зажать кнопкку - ключ сохранися в EEPROM
+    if (EPPROM_AddKey(addr)) Sd_ReadOK(); 
+      else Sd_ErrorBeep();
+    //OLED_printKey(addr);  
+  }   
   if (millis() - stTimer < 100) return; //задержка в 100 мс
   stTimer = millis();
   if (!writeflag){
-    if (searchCyfral() || searchMetacom() || searchEM_Marine() || searchIbutton()){            // запускаем поиск cyfral, затем поиск EM_Marine, затем поиск dallas
+    if (searchCyfral() || searchMetacom() || searchEM_Marine() || searchIbutton() ){            // запускаем поиск cyfral, затем поиск EM_Marine, затем поиск dallas
       digitalWrite(G_Led, LOW);
       Sd_ReadOK();
       readflag = true;
       clearLed(); digitalWrite(G_Led, HIGH);
       OLED_printKey(addr);
-    }
-    if (readflag){
-      if (enc1.isHolded()){
-        EPPROM_AddKey(addr);
-        OLED_printKey(addr);  
-      }
-      if (enc1.isLeft() && (EEPROM_key_count > 0)){
-        EEPROM_key_index--;
-        if (EEPROM_key_index < 1) EEPROM_key_index = EEPROM_key_count;
-        EEPROM_get_key(EEPROM_key_index, addr);
-        OLED_printKey(addr);            
-      }
-      if (enc1.isRight() && (EEPROM_key_count > 0)){
-        EEPROM_key_index++;
-        if (EEPROM_key_index > EEPROM_key_count) EEPROM_key_index = 1;
-        EEPROM_get_key(EEPROM_key_index, addr);
-        OLED_printKey(addr);            
-      }
     }
   }
   if (writeflag && readflag){
