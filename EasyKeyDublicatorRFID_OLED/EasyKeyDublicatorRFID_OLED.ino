@@ -1,3 +1,12 @@
+/*
+  Скетч к проекту "Копировальщик ключей для домофона RFID с OLED дисплеем и хранением 8 ключей в память EEPROM"
+  Аппаратная часть построена на Arduino Nano
+  Исходники на GitHub: https://github.com/AlexMalov/EasyKeyDublicatorRFID_OLED/
+  Автор: МЕХАТРОН DIY, AlexMalov, 2019
+  v 3.0
+*/
+
+// Настройки
 #include <OneWire.h>
 #include "pitches.h"
 #include <EEPROM.h>
@@ -64,12 +73,12 @@ void setup() {
   if (EEPROM_key_count != 0 ) {
     EEPROM_key_index = EEPROM[1];
     Serial.print("Read key code from EEPROM: ");
-    EEPROM_get_key(EEPROM_key_index, addr);
+    EEPROM_get_key(EEPROM_key_index, keyID);
     for (byte i = 0; i < 8; i++) {
-      keyID[i] = addr[i];
-      Serial.print(addr[i], HEX); Serial.print(":");  
+      keyID[i] = keyID[i];
+      Serial.print(keyID[i], HEX); Serial.print(":");  
     }
-    OLED_printKey(addr);
+    OLED_printKey(keyID);
     readflag = true;
     clearLed(); digitalWrite(G_Led, HIGH);
   } else {
@@ -84,7 +93,7 @@ void setup() {
 }
 
 void timerIsr() {   // прерывание таймера для энкодера
-  enc1.tick();     // отработка теперь находится здесь
+  enc1.tick();     
 }
 
 void clearLed(){
@@ -111,7 +120,7 @@ void OLED_printKey(byte buf[8]){
   switch (keyType){
     case keyDallas: st += "Dallas"; break;      
     case keyCyfral: st += "Cyfral";  break;  
-    case keyMetacom: st += "Metacom"; break;             
+    case keyMetacom: st += "Metakom"; break;             
     case keyEM_Marine: st += "EM_Marine"; break;
     case keyUnknown: st += "Unknown"; break;
   }
@@ -119,7 +128,7 @@ void OLED_printKey(byte buf[8]){
   myOLED.update();
 }
 
-bool EPPROM_AddKey(byte buf[8]){
+bool EPPROM_AddKey(byte buf[]){
   byte buf1[8]; bool eq = true; 
   //EEPROM.update(0, 0);
   //EEPROM.update(1, 0);
@@ -716,21 +725,21 @@ void loop() {
   if (enc1.isLeft() && (EEPROM_key_count > 0)){       //при повороте энкодера листаем ключи из eeprom
     EEPROM_key_index--;
     if (EEPROM_key_index < 1) EEPROM_key_index = EEPROM_key_count;
-    EEPROM_get_key(EEPROM_key_index, addr);
-    OLED_printKey(addr);
+    EEPROM_get_key(EEPROM_key_index, keyID);
+    OLED_printKey(keyID);
     Sd_WriteStep();
   }
   if (enc1.isRight() && (EEPROM_key_count > 0)){
     EEPROM_key_index++;
     if (EEPROM_key_index > EEPROM_key_count) EEPROM_key_index = 1;
-    EEPROM_get_key(EEPROM_key_index, addr);
-    OLED_printKey(addr);
+    EEPROM_get_key(EEPROM_key_index, keyID);
+    OLED_printKey(keyID);
     Sd_WriteStep();            
   }
   if (!writeflag && readflag && enc1.isHolded()){     // Если зажать кнопкку - ключ сохранися в EEPROM
-    if (EPPROM_AddKey(addr)) Sd_ReadOK(); 
+    if (EPPROM_AddKey(keyID)) Sd_ReadOK(); 
       else Sd_ErrorBeep();
-    //OLED_printKey(addr);  
+    OLED_printKey(keyID);  
   }   
   if (millis() - stTimer < 100) return; //задержка в 100 мс
   stTimer = millis();
@@ -740,7 +749,7 @@ void loop() {
       Sd_ReadOK();
       readflag = true;
       clearLed(); digitalWrite(G_Led, HIGH);
-      OLED_printKey(addr);
+      OLED_printKey(keyID);
     }
   }
   if (writeflag && readflag){
