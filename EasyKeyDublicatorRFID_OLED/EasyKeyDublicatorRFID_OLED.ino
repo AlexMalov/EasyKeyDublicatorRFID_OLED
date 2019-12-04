@@ -118,10 +118,10 @@ void OLED_printKey(byte buf[8]){
   myOLED.print(st, 0, 12);
   st = "Type ";
   switch (keyType){
-    case keyDallas: st += "Dallas"; break;      
-    case keyCyfral: st += "Cyfral";  break;  
-    case keyMetacom: st += "Metakom"; break;             
-    case keyEM_Marine: st += "EM_Marine"; break;
+    case keyDallas: st += "Dallas wire"; break;      
+    case keyCyfral: st += "Cyfral wire";  break;  
+    case keyMetacom: st += "Metakom wire"; break;             
+    case keyEM_Marine: st += "EM_Marine rfid"; break;
     case keyUnknown: st += "Unknown"; break;
   }
   myOLED.print(st, 0, 24);
