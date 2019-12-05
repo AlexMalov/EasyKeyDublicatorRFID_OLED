@@ -52,6 +52,30 @@ enum emRWType {rwUnknown, TM01, RW1990_1, RW1990_2, TM2004, T5557, EM4305};     
 enum emkeyType {keyUnknown, keyDallas, keyTM2004, keyCyfral, keyMetacom, keyEM_Marine};    // тип оригинального ключа  
 emkeyType keyType;
 
+void OLED_printKey(byte buf[8], byte msgType = 0){
+  String st;
+  switch (msgType){
+    case 0: st = "The key " + String(EEPROM_key_index) + " of " + String(EEPROM_key_count) + " in ROM"; break;      
+    case 1: st = "Hold the Btn to save";  break; 
+    case 3: st = "The key exists in ROM";  break;   
+  }
+  myOLED.clrScr();
+  myOLED.print(st, 0, 0);  
+  st = "";
+  for (byte i = 0; i < 8; i++) st = st + String(buf[i], HEX) +":";
+  myOLED.print(st, 0, 12);
+  st = "Type ";
+  switch (keyType){
+    case keyDallas: st += "Dallas wire"; break;      
+    case keyCyfral: st += "Cyfral wire";  break;  
+    case keyMetacom: st += "Metakom wire"; break;             
+    case keyEM_Marine: st += "EM_Marine rfid"; break;
+    case keyUnknown: st += "Unknown"; break;
+  }
+  myOLED.print(st, 0, 24);
+  myOLED.update();
+}
+
 void setup() {
   myOLED.begin(SSD1306_128X32); //инициализируем дисплей
   pinMode(BtnPin, INPUT_PULLUP);                            // включаем чтение и подягиваем пин кнопки режима к +5В
@@ -108,40 +132,27 @@ void MyDelay(unsigned long tm){
   } while (millis() < (stTr + tm)); 
 }
 
-void OLED_printKey(byte buf[8]){
-  String st;
-  st = "The key " + String(EEPROM_key_index) + " of " + String(EEPROM_key_count) + " in ROM";
-  myOLED.clrScr();
-  myOLED.print(st, 0, 0);  
-  st = "";
-  for (byte i = 0; i < 8; i++) st = st + String(buf[i], HEX) +":";
-  myOLED.print(st, 0, 12);
-  st = "Type ";
-  switch (keyType){
-    case keyDallas: st += "Dallas wire"; break;      
-    case keyCyfral: st += "Cyfral wire";  break;  
-    case keyMetacom: st += "Metakom wire"; break;             
-    case keyEM_Marine: st += "EM_Marine rfid"; break;
-    case keyUnknown: st += "Unknown"; break;
-  }
-  myOLED.print(st, 0, 24);
-  myOLED.update();
-}
-
-bool EPPROM_AddKey(byte buf[]){
-  byte buf1[8]; bool eq = true; 
-  //EEPROM.update(0, 0);
-  //EEPROM.update(1, 0);
-  for (byte j = 1; j<=EEPROM_key_count; j++){  // ищем ключ в eeprom. Если находим, то не делаем запись, а индекс переводим в него
+byte indxKeyInROM(byte buf[]){ //возвращает индекс или ноль если нет в ROM
+  byte buf1[8]; bool eq = true;
+  for (byte j = 1; j<=EEPROM_key_count; j++){  // ищем ключ в eeprom. 
     EEPROM.get(j*sizeof(buf1), buf1);
     for (byte i = 0; i < 8; i++) 
       if (buf1[i] != buf[i]) { eq = false; break;}
-    if (eq) {
-      EEPROM_key_index = j;
-      EEPROM.update(1, EEPROM_key_index);
-      return false;  
-    }
+    if (eq) return j;
     eq = true;
+  }
+  return 0;
+}
+
+bool EPPROM_AddKey(byte buf[]){
+  byte buf1[8]; byte indx;
+  //EEPROM.update(0, 0);
+  //EEPROM.update(1, 0);
+  indx = indxKeyInROM(buf); // ищем ключ в eeprom. Если находим, то не делаем запись, а индекс переводим в него
+  if ( indx != 0) { 
+    EEPROM_key_index = indx;
+    EEPROM.update(1, EEPROM_key_index);
+    return false; 
   }
   EEPROM_key_count++;
   if (EEPROM_key_count > 8) EEPROM_key_count = 8;
@@ -749,7 +760,8 @@ void loop() {
       Sd_ReadOK();
       readflag = true;
       clearLed(); digitalWrite(G_Led, HIGH);
-      OLED_printKey(keyID);
+      if (indxKeyInROM(keyID) == 0) OLED_printKey(keyID, 1);
+        else OLED_printKey(keyID, 3);
     }
   }
   if (writeflag && readflag){
