@@ -97,6 +97,7 @@ void setup() {
   myOLED.clrScr();          //Очищаем буфер дисплея.
   myOLED.setFont(SmallFont);  //Перед выводом текста необходимо выбрать шрифт
   myOLED.print("Hello, read a key...", LEFT, 0);
+  myOLED.print("by MEXATPOH DIY", LEFT, 24);
   myOLED.update();
   Sd_StartOK();
   EEPROM_key_count = EEPROM[0];
@@ -110,6 +111,7 @@ void setup() {
       Serial.print(keyID[i], HEX); Serial.print(":");  
     }
     Serial.println();
+    delay(10000);
     OLED_printKey(keyID);
     readflag = true;
     clearLed(); digitalWrite(G_Led, HIGH);
