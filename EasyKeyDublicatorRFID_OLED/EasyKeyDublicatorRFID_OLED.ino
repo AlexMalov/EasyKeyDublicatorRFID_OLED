@@ -102,6 +102,7 @@ void setup() {
       keyID[i] = keyID[i];
       Serial.print(keyID[i], HEX); Serial.print(":");  
     }
+    Serial.println();
     OLED_printKey(keyID);
     readflag = true;
     clearLed(); digitalWrite(G_Led, HIGH);
@@ -125,12 +126,6 @@ void clearLed(){
   digitalWrite(G_Led, LOW);
   digitalWrite(B_Led, LOW);  
 }
-void MyDelay(unsigned long tm){
-  unsigned long stTr = millis();
-  do {
-    enc1.tick();    
-  } while (millis() < (stTr + tm)); 
-}
 
 byte indxKeyInROM(byte buf[]){ //возвращает индекс или ноль если нет в ROM
   byte buf1[8]; bool eq = true;
@@ -146,25 +141,23 @@ byte indxKeyInROM(byte buf[]){ //возвращает индекс или нол
 
 bool EPPROM_AddKey(byte buf[]){
   byte buf1[8]; byte indx;
-  //EEPROM.update(0, 0);
-  //EEPROM.update(1, 0);
   indx = indxKeyInROM(buf); // ищем ключ в eeprom. Если находим, то не делаем запись, а индекс переводим в него
   if ( indx != 0) { 
     EEPROM_key_index = indx;
     EEPROM.update(1, EEPROM_key_index);
     return false; 
   }
-  EEPROM_key_count++;
-  if (EEPROM_key_count > 8) EEPROM_key_count = 8;
-  EEPROM_key_index++;
+  if (EEPROM_key_count <= 8) EEPROM_key_count++;
+  if (EEPROM_key_count < 8) EEPROM_key_index = EEPROM_key_count;
+    else EEPROM_key_index++;
   if (EEPROM_key_index > EEPROM_key_count) EEPROM_key_index = 1;
   Serial.println("Adding to EEPROM");
   for (byte i = 0; i < 8; i++) {
     buf1[i] = buf[i];
     Serial.print(buf[i], HEX); Serial.print(":");  
   }
+  Serial.println();
   EEPROM.put(EEPROM_key_index*sizeof(buf1), buf1);
-  //Serial.println(); Serial.println(sizeof(buf1));
   EEPROM.update(0, EEPROM_key_count);
   EEPROM.update(1, EEPROM_key_index);
   return true;
@@ -412,7 +405,7 @@ void ACsetOn(){
 bool read_cyfral(byte* buf, byte CyfralPin){
   unsigned long ti; byte j = 0;
   digitalWrite(CyfralPin, LOW); pinMode(CyfralPin, OUTPUT);  //отклчаем питание от ключа
-  MyDelay(50);
+  delay(50);
   pinMode(CyfralPin, INPUT);  // включаем пиание Cyfral
   ACsetOn(); 
   for (byte i = 0; i<36; i++){    // чиаем 36 bit
@@ -449,7 +442,7 @@ bool searchCyfral(){
 bool read_metacom(byte* buf, byte MetacomPin){
   unsigned long ti; byte j = 1, k = 0;
   digitalWrite(MetacomPin, LOW); pinMode(MetacomPin, OUTPUT);  //отклчаем питание от ключа
-  MyDelay(50);
+  delay(50);
   pinMode(MetacomPin, INPUT);  // включаем пиание Metacom
   ACsetOn();
   ti = pulseAComp(HIGH);
@@ -508,7 +501,7 @@ bool vertEvenCheck(byte* buf){        // проверка четности ст�
   return true;
 }
 
-byte ttAComp(unsigned long timeOut = 1000){  // pulse 0 or 1 or -1 if timeout
+byte ttAComp(unsigned long timeOut = 5000){  // pulse 0 or 1 or -1 if timeout
   byte AcompState, AcompInitState;
   unsigned long tStart = micros();
   AcompInitState = (ACSR >> ACO)&1;               // читаем флаг компаратора
@@ -567,7 +560,7 @@ bool searchEM_Marine( bool copyKey = true){
   byte gr = digitalRead(G_Led);
   bool rez = false;
   rfidACsetOn();            // включаем генератор 125кГц и компаратор
-  MyDelay(13);                //13 мс длятся переходные прцессы детектора 
+  delay(13);                //13 мс длятся переходные прцессы детектора 
   if (!readEM_Marie(addr)) goto l2;
   rez = true;
   keyType = keyEM_Marine;
@@ -612,7 +605,7 @@ bool T5557_blockRead(byte* buf){
     if (ti == 2)  break;         //timeout
     if ( ( ti == 1 ) && ( i == 0)) {  // если не находим стартовый 0 - это ошибка
       ti=2; 
-      Serial.print("b2 ");
+      //Serial.print("b2 ");
       break;
     }
     if (i > 0){     //начиная с 1-го бита пишем в буфер
@@ -652,6 +645,7 @@ bool write2rfidT5557(byte* buf){
   delay(6);
   rfidGap(30 * 8);          //start gap
   sendOpT5557(0b00);
+  delay(6);
   result = readEM_Marie(addr);
   TCCR2A &=0b00111111;              //Оключить ШИМ COM2A (pin 11)
   for (byte i = 0; i < 8; i++)
@@ -671,7 +665,7 @@ bool write2rfidT5557(byte* buf){
 emRWType getRfidRWtype(){
   unsigned long data32, data33; byte buf[4] = {0, 0, 0, 0}; 
   rfidACsetOn();            // включаем генератор 125кГц и компаратор
-  MyDelay(13);                //13 мс длятся переходные прцессы детектора
+  delay(13);                //13 мс длятся переходные прцессы детектора
   rfidGap(30 * 8);          //start gap
   sendOpT5557(0b11, 0, 0, 0, 1); //переходим в режим чтения Vendor ID 
   if (!T5557_blockRead(buf)) return rwUnknown; 
@@ -720,7 +714,16 @@ bool write2rfid(){
 
 unsigned long stTimer = millis();
 void loop() {
-  if ((Serial.read() == 't') || enc1.isRelease()) {  // переключаель режима чтение/запись
+  char echo = Serial.read();
+  if (echo == 'c'){
+    myOLED.print("EEPROM cleared success!", 0, 0);
+    Serial.println("EEPROM cleared");
+    EEPROM.update(0, 0); EEPROM.update(1, 0);
+    EEPROM_key_count = 0; EEPROM_key_index = 0;
+    Sd_ReadOK();
+    myOLED.update();
+  }
+  if ((echo == 't') || enc1.isRelease()) {  // переключаель режима чтение/запись
     if (readflag == true) {
       writeflag = !writeflag;
       clearLed(); 
@@ -728,7 +731,7 @@ void loop() {
         else digitalWrite(G_Led, HIGH);
       Serial.print("Writeflag = "); Serial.println(writeflag);  
     } else {
-      clearLed();   
+      clearLed();
       Sd_ErrorBeep();
       digitalWrite(B_Led, HIGH);
     }
