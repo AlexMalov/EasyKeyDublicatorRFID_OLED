@@ -76,6 +76,13 @@ void OLED_printKey(byte buf[8], byte msgType = 0){
   myOLED.update();
 }
 
+void OLED_printError(String st){
+  myOLED.clrScr();
+  myOLED.print("Error!", 0, 0);
+  myOLED.print(st, 0, 12);  
+  myOLED.update();
+}
+
 void setup() {
   myOLED.begin(SSD1306_128X32); //инициализируем дисплей
   pinMode(BtnPin, INPUT_PULLUP);                            // включаем чтение и подягиваем пин кнопки режима к +5В
@@ -251,6 +258,7 @@ bool write2iBtnTM2004(){                // функция записи на TM20
   if (!result){
     ibutton.reset();
     Serial.println(" The key copy faild");
+    OLED_printError("The key copy faild");
     Sd_ErrorBeep();
     digitalWrite(R_Led, HIGH);
     return false;    
@@ -287,6 +295,7 @@ bool write2iBtnRW1990_1_2_TM01(emRWType rwType){              // функция 
   digitalWrite(R_Led, LOW);       
   if (!dataIsBurningOK()){          // проверяем корректность записи
     Serial.println(" The key copy faild");
+    OLED_printError("The key copy faild");
     Sd_ErrorBeep();
     digitalWrite(R_Led, HIGH);
     return false;
@@ -340,6 +349,7 @@ bool write2iBtn(){
   if (Check == 8) {                     // если коды совпадают, ничего писать не нужно
     digitalWrite(R_Led, LOW); 
     Serial.println(" it is the same key. Writing in not needed.");
+    OLED_printError("It is the same key");
     Sd_ErrorBeep();
     digitalWrite(R_Led, HIGH);
     delay(500);
@@ -365,6 +375,7 @@ bool searchIbutton(){
     if (getRWtype() == TM2004) keyType = keyTM2004;
     if (OneWire::crc8(addr, 7) != addr[7]) {
       Serial.println("CRC is not valid!");
+      OLED_printError("CRC is not valid!");
       Sd_ErrorBeep();
       digitalWrite(B_Led, HIGH);
       return false;
@@ -652,6 +663,7 @@ bool write2rfidT5557(byte* buf){
     if (addr[i] != keyID[i]) { result = false; break; }
   if (!result){
     Serial.println(" The key copy faild");
+    OLED_printError("The key copy faild");
     Sd_ErrorBeep();
   } else {
     Serial.println(" The key has copied successesfully");
@@ -695,6 +707,7 @@ bool write2rfid(){
     if (Check) {                                          // если коды совпадают, ничего писать не нужно
       digitalWrite(R_Led, LOW); 
       Serial.println(" it is the same key. Writing in not needed.");
+      OLED_printError("It is the same key");
       Sd_ErrorBeep();
       digitalWrite(R_Led, HIGH);
       delay(500);
