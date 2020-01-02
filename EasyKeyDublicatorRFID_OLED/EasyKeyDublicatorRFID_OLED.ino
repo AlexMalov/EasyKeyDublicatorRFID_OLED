@@ -587,28 +587,7 @@ void readAnalog(){
 }
 
 void resetMetacomCyfral(bool rsMc = true){
-  unsigned long ti = 0;
-  analogRead(iButtonPin);
-  ADCsetOn();
-  byte aver = calcAverage();
-  digitalWrite(iButtonPin, LOW); pinMode(iButtonPin, OUTPUT);  //отклчаем питание от ключа
-  delay(1000);
-  unsigned long tEnd = micros() + 1000;
-  pinMode(iButtonPin, INPUT);                                   // включаем пиание Metacom  
-  do {
-    ADCSRA |= (1<<ADSC);
-    while(ADCSRA & (1 << ADSC)); // Wait until the ADSC bit has been cleared
-    if (ADCH < 130) {ti = micros() + 1000 - tEnd; break;}
-  } while (micros()  < tEnd); 
-  delayMicroseconds(3);
-  if (rsMc) ibutton.write(0xCB);
-    else ibutton.write(0xCA);
-  ibutton.write_bit(0);
-  delay(10); 
-  if (!ibutton.reset()) Serial.println(" no devices on the wire3");
-    else if (rsMc) Serial.println(" The key TM-01 has reset from Metacom to Dallas");
-          else Serial.println(" The key TM-01 has reset from Cyfral to Dallas");
-  Serial.println(ti);
+
 }
 
 //**********EM-Marine***************************
