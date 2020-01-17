@@ -3,7 +3,7 @@
   Аппаратная часть построена на Arduino Nano
   Исходники на GitHub: https://github.com/AlexMalov/EasyKeyDublicatorRFID_OLED/
   Автор: МЕХАТРОН DIY, AlexMalov, 2019
-  v 3.1.1   fix bluemode
+  v 3.1.1   fix blueMode
 */
 
 // Настройки
