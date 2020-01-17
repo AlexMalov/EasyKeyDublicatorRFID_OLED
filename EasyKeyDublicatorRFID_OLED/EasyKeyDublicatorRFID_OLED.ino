@@ -825,32 +825,23 @@ bool write2rfid(){
 
 
 void SendEM_Marine(byte* buf){
-  byte bt; unsigned long tStart; 
   TCCR2A &=0b00111111; // отключаем шим 
   digitalWrite(FreqGen, LOW);
   //FF:A9:8A:A4:87:78:98:6A
-  delay(10); 
+  delay(20);
   for (byte k = 0; k<10; k++){
     for (byte i = 0; i<8; i++){
       for (byte j = 0; j<8; j++){
-        bt = 1 & (buf[i]>>(7-j)); 
-        if (!bt) {
-          pinMode(FreqGen, OUTPUT);
-          tStart = micros();
-          do {
-            digitalWrite(FreqGen, !digitalRead(FreqGen));  
-          } while ((long)(micros() - tStart) < 250);
-          pinMode(FreqGen, INPUT);
-          delayMicroseconds(250);
-        } else {
+        if (1 & (buf[i]>>(7-j))) {
           pinMode(FreqGen, INPUT);
           delayMicroseconds(250);
           pinMode(FreqGen, OUTPUT); 
-          tStart = micros();
-          do {
-            digitalWrite(FreqGen, !digitalRead(FreqGen));  
-          } while ((long)(micros() - tStart) < 250);
-
+          delayMicroseconds(250);
+        } else {
+          pinMode(FreqGen, OUTPUT);
+          delayMicroseconds(250);
+          pinMode(FreqGen, INPUT);
+          delayMicroseconds(250);
         }
       }
     }
