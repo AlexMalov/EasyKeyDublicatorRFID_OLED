@@ -147,7 +147,6 @@ void setup() {
     Serial.print(F("Read key code from EEPROM: "));
     EEPROM_get_key(EEPROM_key_index, keyID);
     for (byte i = 0; i < 8; i++) {
-      //keyID[i] = keyID[i];
       Serial.print(keyID[i], HEX); Serial.print(F(":"));
     }
     Serial.println();
@@ -194,7 +193,7 @@ bool try_key(MFRC522::MIFARE_Key *key)
     }
     else {
       result = true;
-      for (int p = 0; p < 16; p++) //De 16 bits uit de block uitlezen
+      for (int p = 0; p < 16; p++)
       {
         waarde [block][p] = buffer[p];
       }
@@ -237,7 +236,7 @@ void WriteMifare() {
     for (byte i = 0; i < 6; i++) {
       key.keyByte[i] = 0xFF;
     }
-    for (int i = 1; i <= 62; i++) { //De blocken 1 tot 62 kopieren, behalve al deze onderstaande blocken (omdat deze de authenticatie blokken zijn)
+    for (int i = 1; i <= 62; i++) { 
       if (i == 3 || i == 7 || i == 11 || i == 15 || i == 19 || i == 23 || i == 27 || i == 31 || i == 35 || i == 39 || i == 43 || i == 47 || i == 51 || i == 55 || i == 59) {
         i++;
       }
@@ -363,7 +362,6 @@ emRWType getRWtype() {
   delay(10); pinMode(iButtonPin, INPUT);
   ibutton.reset(); ibutton.write(0xB5); // send 0xB5 - запрос на чтение флага записи
   answer = ibutton.read();
-  //Serial.print(F("\n Answer RW-1990.1: ")); Serial.println(answer, HEX);
   if (answer == 0xFE) {
     Serial.println(F(" Type: dallas RW-1990.1 "));
     return RW1990_1;            // это RW-1990.1
@@ -390,7 +388,6 @@ emRWType getRWtype() {
   byte m1[3] = {0xAA, 0, 0};                                // вычисляем CRC комманды
   if (OneWire::crc8(m1, 3) == answer) {
     answer = ibutton.read();                                  // читаем регистр статуса
-    //Serial.print(" status: "); Serial.println(answer, HEX);
     Serial.println(F(" Type: dallas TM2004"));
     ibutton.reset();
     return TM2004; // это Type: TM2004
