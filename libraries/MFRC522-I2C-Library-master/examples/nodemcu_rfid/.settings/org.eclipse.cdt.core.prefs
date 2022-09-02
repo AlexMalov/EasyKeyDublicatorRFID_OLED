@@ -1,0 +1,6 @@
+eclipse.preferences.version=1
+environment/project/0.910961921/PATH/delimiter=\:
+environment/project/0.910961921/PATH/operation=replace
+environment/project/0.910961921/PATH/value=/Library/Frameworks/Python.framework/Versions/3.5/bin\:/Library/Frameworks/Python.framework/Versions/2.7/bin\:/opt/local/bin\:/opt/local/sbin\:/usr/local/bin\:/usr/bin\:/bin\:/usr/sbin\:/sbin
+environment/project/0.910961921/append=true
+environment/project/0.910961921/appendContributed=true
